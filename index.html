@@ -1,0 +1,832 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <!-- 設定網頁編碼與響應式視口 -->
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>陰森宅邸：夜幕逃脫 - Haunted Manor</title>
+    <!-- 引入 Google Fonts 恐怖/復古風格字體 -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Creepster&family=VT323&family=Noto+Serif+TC:wght@400;700&display=swap" rel="stylesheet">
+    
+    <style>
+        /* ==========================================
+         * CSS 樣式區域 - 恐怖風格與視覺效果設計
+         * ========================================== */
+
+        /* 全局變數設定 */
+        :root {
+            --bg-color: #050508;
+            --text-color: #d1d5db;
+            --danger-color: #b91c1c;
+            --accent-glow: #ef4444;
+            --panel-bg: rgba(10, 10, 15, 0.85);
+            --font-scary: 'Creepster', cursive;
+            --font-retro: 'VT323', monospace;
+            --font-main: 'Noto Serif TC', serif;
+        }
+
+        /* 基礎重置與頁面佈局 */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none; /* 防止遊戲中選取文字破壞沉浸感 */
+        }
+
+        body, html {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: var(--font-main);
+        }
+
+        /* 全螢幕背景 Canvas (動態霧氣與夜晚天氣) */
+        #bgCanvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+            pointer-events: none;
+        }
+
+        /* CRT 螢幕掃描線與暗角特效 */
+        .vignette-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 2;
+            pointer-events: none;
+            background: radial-gradient(circle, transparent 40%, rgba(0, 0, 0, 0.95) 90%);
+        }
+
+        .scanline-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 3;
+            pointer-events: none;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%);
+            background-size: 100% 4px;
+            opacity: 0.6;
+        }
+
+        /* 閃電全光照射層 */
+        #lightningFlash {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #fff;
+            opacity: 0;
+            z-index: 4;
+            pointer-events: none;
+            transition: opacity 0.05s ease-out;
+        }
+
+        /* 主容器：置中顯示遊戲介面 */
+        .game-wrapper {
+            position: relative;
+            z-index: 10;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 100%;
+            height: 100%;
+            padding: 20px;
+        }
+
+        /* 遊戲主要面板 */
+        .game-container {
+            width: 100%;
+            max-width: 900px;
+            height: 650px;
+            background: var(--panel-bg);
+            border: 2px solid #374151;
+            box-shadow: 0 0 35px rgba(0, 0, 0, 0.9), 0 0 15px rgba(185, 28, 28, 0.3);
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            backdrop-filter: blur(5px);
+            position: relative;
+        }
+
+        /* 遊戲頂部狀態欄 (血量、恐懼值、物品欄) */
+        .status-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 20px;
+            background-color: rgba(5, 5, 8, 0.9);
+            border-bottom: 1px solid #1f2937;
+            font-family: var(--font-retro);
+            font-size: 1.2rem;
+            letter-spacing: 1px;
+        }
+
+        .stat-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .progress-bar-bg {
+            width: 120px;
+            height: 14px;
+            background-color: #111827;
+            border: 1px solid #374151;
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .progress-bar-fill-hp {
+            height: 100%;
+            width: 100%;
+            background-color: #dc2626;
+            transition: width 0.3s ease;
+        }
+
+        .progress-bar-fill-sanity {
+            height: 100%;
+            width: 100%;
+            background-color: #2563eb;
+            transition: width 0.3s ease;
+        }
+
+        /* 主內容顯示區域 */
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+            gap: 15px;
+            overflow-y: auto;
+        }
+
+        /* 房間標題 */
+        .location-title {
+            font-family: var(--font-scary);
+            font-size: 2.2rem;
+            color: var(--accent-glow);
+            text-shadow: 0 0 10px rgba(239, 68, 68, 0.6);
+            letter-spacing: 2px;
+        }
+
+        /* 文字故事描述框 */
+        .story-box {
+            background-color: rgba(0, 0, 0, 0.6);
+            border-left: 4px solid var(--danger-color);
+            padding: 15px;
+            min-height: 140px;
+            font-size: 1.05rem;
+            line-height: 1.7;
+            border-radius: 0 6px 6px 0;
+            overflow-y: auto;
+            color: #e5e7eb;
+        }
+
+        /* 互動控制項面板 */
+        .controls-area {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 12px;
+            margin-top: auto;
+        }
+
+        /* 恐怖風格按鈕設計 */
+        .action-btn {
+            background: linear-gradient(180deg, #1f2937 0%, #111827 100%);
+            color: #d1d5db;
+            border: 1px solid #4b5563;
+            padding: 12px 18px;
+            font-size: 1rem;
+            font-family: var(--font-main);
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            text-shadow: 0 1px 2px #000;
+        }
+
+        .action-btn:hover:not(:disabled) {
+            background: linear-gradient(180deg, #374151 0%, #1f2937 100%);
+            border-color: var(--accent-glow);
+            color: #ffffff;
+            box-shadow: 0 0 12px rgba(239, 68, 68, 0.4);
+            transform: translateY(-2px);
+        }
+
+        .action-btn:active:not(:disabled) {
+            transform: translateY(0);
+        }
+
+        .action-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+            border-color: #374151;
+        }
+
+        /* 物品欄區塊 */
+        .inventory-section {
+            border-top: 1px solid #1f2937;
+            padding: 12px 20px;
+            background-color: rgba(5, 5, 8, 0.95);
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .inventory-label {
+            font-family: var(--font-retro);
+            font-size: 1.1rem;
+            color: #9ca3af;
+        }
+
+        .inventory-slots {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .item-tag {
+            background: #1f2937;
+            border: 1px solid #4b5563;
+            color: #f3f4f6;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            animation: fadeIn 0.4s ease-in-out;
+        }
+
+        /* 密碼鎖跳出彈窗 */
+        .modal-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 50;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+
+        .modal-overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .modal-content {
+            background: #111827;
+            border: 2px solid var(--danger-color);
+            padding: 25px;
+            border-radius: 8px;
+            text-align: center;
+            width: 320px;
+            box-shadow: 0 0 25px rgba(225, 29, 72, 0.4);
+        }
+
+        .code-input {
+            width: 100%;
+            padding: 10px;
+            margin: 15px 0;
+            background: #030712;
+            border: 1px solid #374151;
+            color: #ef4444;
+            font-family: var(--font-retro);
+            font-size: 2rem;
+            text-align: center;
+            letter-spacing: 5px;
+            border-radius: 4px;
+            outline: none;
+        }
+
+        /* 動畫效果定義 */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* 震動效果 (受傷或驚嚇時觸發) */
+        .shake-effect {
+            animation: shake 0.4s cubic-bezier(.36,.07,.19,.97) both;
+        }
+
+        @keyframes shake {
+            10%, 90% { transform: translate3d(-2px, 0, 0); }
+            20%, 80% { transform: translate3d(4px, 0, 0); }
+            30%, 50%, 70% { transform: translate3d(-6px, 0, 0); }
+            40%, 60% { transform: translate3d(6px, 0, 0); }
+        }
+
+        /* 響應式微調 (微調手機與平板畫面) */
+        @media (max-width: 640px) {
+            .game-container {
+                height: 95vh;
+            }
+            .location-title {
+                font-size: 1.8rem;
+            }
+            .controls-area {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 1. 動態背景 Canvas 與視覺疊加層 -->
+    <canvas id="bgCanvas"></canvas>
+    <div class="vignette-overlay"></div>
+    <div class="scanline-overlay"></div>
+    <div id="lightningFlash"></div>
+
+    <!-- 2. 遊戲主畫面區域 -->
+    <div class="game-wrapper">
+        <div class="game-container" id="gameWindow">
+            
+            <!-- 狀態列：顯示生命值、神智值 (Sanity) -->
+            <div class="status-bar">
+                <div class="stat-item">
+                    <span>生命值 HP:</span>
+                    <div class="progress-bar-bg">
+                        <div id="hpBar" class="progress-bar-fill-hp"></div>
+                    </div>
+                </div>
+                <div class="stat-item">
+                    <span>理智 SAN:</span>
+                    <div class="progress-bar-bg">
+                        <div id="sanityBar" class="progress-bar-fill-sanity"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 主故事與選擇區域 -->
+            <div class="main-content">
+                <h2 id="locationTitle" class="location-title">陰森大廳</h2>
+                <div id="storyBox" class="story-box">
+                    <!-- 劇情文字將由 JavaScript 動態寫入 -->
+                </div>
+                
+                <!-- 操作按鈕區域 -->
+                <div id="controlsArea" class="controls-area">
+                    <!-- 互動按鈕將由 JavaScript 動態生成 -->
+                </div>
+            </div>
+
+            <!-- 底部物品欄 -->
+            <div class="inventory-section">
+                <span class="inventory-label">持有物品:</span>
+                <div id="inventorySlots" class="inventory-slots">
+                    <span style="color: #6b7280; font-size: 0.9rem;">(空無一物)</span>
+                </div>
+            </div>
+
+            <!-- 密碼鎖彈出方塊 (用於大門解鎖機制) -->
+            <div id="codeModal" class="modal-overlay">
+                <div class="modal-content">
+                    <h3 style="color: #f3f4f6; margin-bottom: 8px;">輸入解鎖密碼</h3>
+                    <p style="color: #9ca3af; font-size: 0.85rem;">請輸入 4 位數密碼以解開鐵門</p>
+                    <input type="text" id="codeInput" class="code-input" maxlength="4" placeholder="0000">
+                    <div style="display: flex; gap: 10px; justify-content: center;">
+                        <button class="action-btn" onclick="submitCode()">確認解鎖</button>
+                        <button class="action-btn" onclick="closeCodeModal()">取消</button>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- ==========================================
+         * JAVASCRIPT 區域 - 動畫背景與遊戲邏輯
+         * ========================================== -->
+    <script>
+        /* --------------------------------------------------
+         * 1. 繪製夜晚背景動畫 (Canvas: 月亮、動態霧氣與雨滴)
+         * -------------------------------------------------- */
+        const canvas = document.getElementById('bgCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // 設定 Canvas 大小適應視口
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        // 霧氣粒子與雨滴陣列
+        const fogParticles = [];
+        const rainDrops = [];
+
+        // 初始化霧氣粒子
+        for (let i = 0; i < 40; i++) {
+            fogParticles.push({
+                x: Math.random() * canvas.width,
+                y: Math.random() * canvas.height,
+                radius: Math.random() * 150 + 100,
+                alpha: Math.random() * 0.15 + 0.05,
+                speedX: (Math.random() - 0.5) * 0.3,
+                speedY: (Math.random() - 0.5) * 0.1
+            });
+        }
+
+        // 初始化雨滴粒子
+        for (let i = 0; i < 80; i++) {
+            rainDrops.push({
+                x: Math.random() * canvas.width,
+                y: Math.random() * canvas.height,
+                length: Math.random() * 20 + 10,
+                speed: Math.random() * 10 + 15,
+                alpha: Math.random() * 0.3 + 0.1
+            });
+        }
+
+        // 渲染夜空與動畫迴圈
+        function renderScene() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // 1.1 繪製深暗夜空背景漸層
+            let bgGradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            bgGradient.addColorStop(0, '#030712');
+            bgGradient.addColorStop(0.7, '#0b0f19');
+            bgGradient.addColorStop(1, '#020408');
+            ctx.fillStyle = bgGradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // 1.2 繪製血紅色詭異月亮
+            const moonX = canvas.width * 0.8;
+            const moonY = canvas.height * 0.2;
+            let moonGlow = ctx.createRadialGradient(moonX, moonY, 10, moonX, moonY, 80);
+            moonGlow.addColorStop(0, 'rgba(185, 28, 28, 0.8)');
+            moonGlow.addColorStop(0.5, 'rgba(127, 29, 29, 0.3)');
+            moonGlow.addColorStop(1, 'transparent');
+            ctx.fillStyle = moonGlow;
+            ctx.beginPath();
+            ctx.arc(moonX, moonY, 80, 0, Math.PI * 2);
+            ctx.fill();
+
+            // 1.3 更新與繪製飄動霧氣
+            fogParticles.forEach(p => {
+                p.x += p.speedX;
+                p.y += p.speedY;
+
+                // 邊界循環機制
+                if (p.x < -p.radius) p.x = canvas.width + p.radius;
+                if (p.x > canvas.width + p.radius) p.x = -p.radius;
+                if (p.y < -p.radius) p.y = canvas.height + p.radius;
+                if (p.y > canvas.height + p.radius) p.y = -p.radius;
+
+                let fogGrad = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.radius);
+                fogGrad.addColorStop(0, `rgba(30, 41, 59, ${p.alpha})`);
+                fogGrad.addColorStop(1, 'transparent');
+                ctx.fillStyle = fogGrad;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+                ctx.fill();
+            });
+
+            // 1.4 更新與繪製淅淅瀝瀝的細雨
+            ctx.strokeStyle = '#94a3b8';
+            ctx.lineWidth = 1;
+            rainDrops.forEach(r => {
+                ctx.beginPath();
+                ctx.globalAlpha = r.alpha;
+                ctx.moveTo(r.x, r.y);
+                ctx.lineTo(r.x - 2, r.y + r.length);
+                ctx.stroke();
+
+                r.y += r.speed;
+                r.x -= 0.5;
+
+                if (r.y > canvas.height) {
+                    r.y = -r.length;
+                    r.x = Math.random() * canvas.width;
+                }
+            });
+            ctx.globalAlpha = 1.0;
+
+            requestAnimationFrame(renderScene);
+        }
+
+        // 啟動動畫迴圈
+        renderScene();
+
+        // 1.5 隨機閃電效果觸發器
+        function triggerLightning() {
+            const flash = document.getElementById('lightningFlash');
+            flash.style.opacity = '0.7';
+            setTimeout(() => { flash.style.opacity = '0'; }, 50);
+            setTimeout(() => { flash.style.opacity = '0.5'; }, 100);
+            setTimeout(() => { flash.style.opacity = '0'; }, 150);
+
+            // 隨機在 8 至 18 秒間觸發下一次閃電
+            setTimeout(triggerLightning, Math.random() * 10000 + 8000);
+        }
+        setTimeout(triggerLightning, 3000);
+
+
+        /* --------------------------------------------------
+         * 2. 遊戲核心狀態與數據管理
+         * -------------------------------------------------- */
+        const gameState = {
+            hp: 100,
+            sanity: 100,
+            inventory: [],
+            currentRoom: 'hall',
+            knowsCode: false,
+            doorUnlocked: false,
+            monsterDefeated: false
+        };
+
+        // 劇本與地點地圖數據結構
+        const rooms = {
+            hall: {
+                title: "陰森大廳",
+                description: "你身處在一間荒廢古宅的大廳中。四周瀰漫著霉味與血腥味，頭頂的吊燈微弱地搖晃著。前方有一扇被重重鐵鍊鎖住的【大門】，左側是【書房】，右側通往【地下室】。",
+                actions: [
+                    { text: "檢查前方的封閉大門", target: "gate" },
+                    { text: "前往左側的【書房】", target: "study" },
+                    { text: "前往右側的【地下室】", target: "basement" },
+                    { text: "在大廳角落仔細搜尋", customAction: "searchHall" }
+                ]
+            },
+            study: {
+                title: "古老書房",
+                description: "書房裡布滿蛛網，書架上的古籍早已腐朽。書桌上放著一本打開的血跡日記，旁邊有一扇打不開的鐵櫃。",
+                actions: [
+                    { text: "閱讀桌上的【血跡日記】", customAction: "readJournal" },
+                    { text: "搜尋書桌抽屜", customAction: "searchDesk" },
+                    { text: "返回【陰森大廳】", target: "hall" }
+                ]
+            },
+            basement: {
+                title: "暗黑地下室",
+                description: "剛踏下階梯，冰冷的寒意席捲而來。這裡一片漆黑，隱約能聽到某種怪物沉重的呼吸聲與抓撓聲音...",
+                actions: [
+                    { text: "開啟手電筒照亮角落", customAction: "useFlashlight" },
+                    { text: "強行在黑暗中尋找物品", customAction: "searchBasementDark" },
+                    { text: "退回【陰森大廳】", target: "hall" }
+                ]
+            }
+        };
+
+        /* --------------------------------------------------
+         * 3. 遊戲介面更新與邏輯控制功能
+         * -------------------------------------------------- */
+
+        // 逐字打字特效顯示故事內容
+        let typingTimer = null;
+        function typeWriter(text, elementId, speed = 25) {
+            const element = document.getElementById(elementId);
+            element.innerHTML = "";
+            let i = 0;
+            clearInterval(typingTimer);
+
+            typingTimer = setInterval(() => {
+                if (i < text.length) {
+                    element.innerHTML += text.charAt(i);
+                    i++;
+                } else {
+                    clearInterval(typingTimer);
+                }
+            }, speed);
+        }
+
+        // 更新 UI 狀態欄 (HP & SAN)
+        function updateStatusUI() {
+            document.getElementById('hpBar').style.width = `${gameState.hp}%`;
+            document.getElementById('sanityBar').style.width = `${gameState.sanity}%`;
+
+            // 理智值過低時的畫面視覺警告
+            if (gameState.sanity < 30) {
+                document.getElementById('gameWindow').style.borderColor = '#ef4444';
+            } else {
+                document.getElementById('gameWindow').style.borderColor = '#374151';
+            }
+
+            // 判定玩家是否死亡或發瘋
+            if (gameState.hp <= 0) {
+                gameOver("你因為傷勢過重，永遠倒在了這座陰森宅邸中...");
+            } else if (gameState.sanity <= 0) {
+                gameOver("你的理智崩潰，最終在無盡的幻覺與恐懼中喪失了自我...");
+            }
+        }
+
+        // 更新物品欄顯示
+        function updateInventoryUI() {
+            const container = document.getElementById('inventorySlots');
+            container.innerHTML = "";
+
+            if (gameState.inventory.length === 0) {
+                container.innerHTML = `<span style="color: #6b7280; font-size: 0.9rem;">(空無一物)</span>`;
+                return;
+            }
+
+            gameState.inventory.forEach(item => {
+                const tag = document.createElement('div');
+                tag.className = 'item-tag';
+                tag.innerHTML = `📦 ${item}`;
+                container.appendChild(tag);
+            });
+        }
+
+        // 切換與加載房間內容
+        function goToRoom(roomKey) {
+            gameState.currentRoom = roomKey;
+            const room = rooms[roomKey];
+
+            document.getElementById('locationTitle').innerText = room.title;
+            typeWriter(room.description, 'storyBox');
+
+            renderControls(room.actions);
+        }
+
+        // 動態生成控制按鈕
+        function renderControls(actions) {
+            const controlsArea = document.getElementById('controlsArea');
+            controlsArea.innerHTML = "";
+
+            actions.forEach(act => {
+                const btn = document.createElement('button');
+                btn.className = 'action-btn';
+                btn.innerText = act.text;
+
+                btn.onclick = () => {
+                    if (act.target === "gate") {
+                        handleGateInteraction();
+                    } else if (act.target) {
+                        goToRoom(act.target);
+                    } else if (act.customAction) {
+                        handleCustomAction(act.customAction);
+                    }
+                };
+
+                controlsArea.appendChild(btn);
+            });
+        }
+
+        // 特殊自訂動作處理 (探索、搜查、使用物品)
+        function handleCustomAction(actionName) {
+            const storyBox = document.getElementById('storyBox');
+
+            switch(actionName) {
+                case 'searchHall':
+                    if (!hasItem("強光手電筒")) {
+                        addItem("強光手電筒");
+                        typeWriter("你在大廳破舊的沙發下發現了一支【強光手電筒】！但似乎缺少電池...", 'storyBox');
+                    } else {
+                        typeWriter("大廳的角落只有堆積的灰塵與破爛傢俱，沒有其他東西了。", 'storyBox');
+                    }
+                    break;
+
+                case 'readJournal':
+                    gameState.sanity = Math.max(0, gameState.sanity - 10);
+                    updateStatusUI();
+                    triggerShake();
+                    typeWriter("日記寫道：『2026年10月...怪物在陰影裡...大門密碼是這座宅邸建造的年份：【1984】...神啊，救救我！』觀看血跡殘影使你的神智下降了 10 點！", 'storyBox');
+                    gameState.knowsCode = true;
+                    break;
+
+                case 'searchDesk':
+                    if (!hasItem("電池")) {
+                        addItem("電池");
+                        typeWriter("你翻開拉鍊卡住的抽屜，在裡面找到了一對可用的【電池】！", 'storyBox');
+                    } else {
+                        typeWriter("抽屜裡已經空空如也。", 'storyBox');
+                    }
+                    break;
+
+                case 'useFlashlight':
+                    if (hasItem("強光手電筒") && hasItem("電池")) {
+                        if (!hasItem("鏽蝕鐵鑰匙")) {
+                            addItem("鏽蝕鐵鑰匙");
+                            typeWriter("你將電池放入手電筒，照亮了地下室的深處！你驚險地避開了躲藏在暗處的怪物，並在地面拾獲了一把【鏽蝕鐵鑰匙】！", 'storyBox');
+                        } else {
+                            typeWriter("手電筒照亮著地下室，怪物躲在光線無法及的陰影角落發出低吼，不敢靠近。", 'storyBox');
+                        }
+                    } else {
+                        gameState.hp -= 20;
+                        gameState.sanity -= 20;
+                        updateStatusUI();
+                        triggerShake();
+                        typeWriter("你的手電筒缺乏電力無法開啟！在黑暗中你被暗處的恐怖爪子抓傷，生命值 -20，神智 -20！", 'storyBox');
+                    }
+                    break;
+
+                case 'searchBasementDark':
+                    gameState.hp -= 35;
+                    gameState.sanity -= 25;
+                    updateStatusUI();
+                    triggerShake();
+                    typeWriter("伸手不見五指的黑暗中，怪物猛然撲向了你！你受到嚴重傷害 (HP -35, SAN -25) 並倉皇逃回階梯旁！", 'storyBox');
+                    break;
+            }
+        }
+
+        // 大門互動與密碼驗證
+        function handleGateInteraction() {
+            if (!hasItem("鏽蝕鐵鑰匙")) {
+                typeWriter("大門被粗鐵鏈牢牢綁住，上頭還有一副強固的【鑰匙鎖】與【數字密碼鎖】。你需要鑰匙與密碼才能解開。", 'storyBox');
+            } else {
+                // 開啟密碼彈窗
+                document.getElementById('codeModal').classList.add('active');
+            }
+        }
+
+        // 送出密碼邏輯
+        function submitCode() {
+            const inputVal = document.getElementById('codeInput').value;
+            if (inputVal === "1984") {
+                closeCodeModal();
+                gameWin();
+            } else {
+                document.getElementById('codeInput').value = "";
+                gameState.sanity -= 15;
+                updateStatusUI();
+                triggerShake();
+                alert("密碼錯誤！鎖頭傳來冰冷的迴響，理智值下降 15 點。");
+            }
+        }
+
+        function closeCodeModal() {
+            document.getElementById('codeModal').classList.remove('active');
+        }
+
+        // 輔助函式：檢查與新增物品
+        function hasItem(itemName) {
+            return gameState.inventory.includes(itemName);
+        }
+
+        function addItem(itemName) {
+            if (!hasItem(itemName)) {
+                gameState.inventory.push(itemName);
+                updateInventoryUI();
+            }
+        }
+
+        // 觸發震動畫面特效
+        function triggerShake() {
+            const win = document.getElementById('gameWindow');
+            win.classList.add('shake-effect');
+            setTimeout(() => {
+                win.classList.remove('shake-effect');
+            }, 400);
+        }
+
+        // 遊戲結束機制 (失敗)
+        function gameOver(reason) {
+            const controlsArea = document.getElementById('controlsArea');
+            document.getElementById('locationTitle').innerText = "你死了...";
+            document.getElementById('locationTitle').style.color = "#dc2626";
+            typeWriter(reason, 'storyBox');
+
+            controlsArea.innerHTML = `
+                <button class="action-btn" style="border-color: #dc2626;" onclick="location.reload()">重新開始遊戲</button>
+            `;
+        }
+
+        // 遊戲通關機制 (成功逃脫)
+        function gameWin() {
+            const controlsArea = document.getElementById('controlsArea');
+            document.getElementById('locationTitle').innerText = "成功逃脫！";
+            document.getElementById('locationTitle').style.color = "#22c55e";
+            
+            typeWriter("咔噠一聲！鐵鍊解開落地的聲音在空曠的大廳迴盪。你推開沉重的大門，迎面吹來夜晚新鮮的冷風。你終於逃離了這座可怕的陰森宅邸！", 'storyBox');
+
+            controlsArea.innerHTML = `
+                <button class="action-btn" style="border-color: #22c55e;" onclick="location.reload()">再玩一次</button>
+            `;
+        }
+
+        // 初始化遊戲起始畫面
+        window.onload = () => {
+            updateStatusUI();
+            updateInventoryUI();
+            goToRoom('hall');
+        };
+    </script>
+</body>
+</html>
